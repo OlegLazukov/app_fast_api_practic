@@ -3,8 +3,8 @@ from pydantic import UUID4
 from typing import List
 
 from src.api.v1.services.board import BoardService
-from src.schemas.input import BoardCreateRequest, BoardUpdateRequest
-from src.schemas.output import BoardResponse
+from src.schemas.board import BoardCreateRequest, BoardUpdateRequest, BoardResponse
+from src.utils.constants import BOARD_NOT_FOUND_MSG
 
 router_board = APIRouter(prefix="/boards")
 
@@ -46,9 +46,9 @@ async def get_board(
     service: BoardService = Depends(BoardService)
 ) -> BoardResponse:
     """Возвращает информацию о доске по её уникальному идентификатору."""
-    board = await service.get_board(board_id)
+    board = await service.get_board_by_id(board_id)
     if not board:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Board not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=BOARD_NOT_FOUND_MSG)
     return BoardResponse.model_validate(board)
 
 @router_board.put(
@@ -63,9 +63,9 @@ async def update_board(
     service: BoardService = Depends(BoardService)
 ) -> BoardResponse:
     """Обновляет информацию о доске по её уникальному идентификатору."""
-    updated_board = await service.update_board(board_id, board_data)
+    updated_board = await service.update_board_by_id(board_id, board_data)
     if not updated_board:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Board not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=BOARD_NOT_FOUND_MSG)
     return BoardResponse.model_validate(updated_board)
 
 @router_board.delete(
@@ -78,4 +78,4 @@ async def delete_board(
     service: BoardService = Depends(BoardService)
 ) -> None:
     """Удаляет доску по её уникальному идентификатору."""
-    await service.delete_board(board_id)
+    await service.delete_board_by_id(board_id)

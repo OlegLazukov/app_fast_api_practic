@@ -1,57 +1,48 @@
 from typing import Optional, Sequence
 from uuid import UUID
-from sqlalchemy.future import select
-from fastapi import Depends, HTTPException
-from src.schemas.input import BoardCreateRequest, BoardUpdateRequest
+from src.schemas.board import BoardCreateRequest, BoardUpdateRequest
 from src.models.models import Board
-from src.utils.unit_of_work import UnitOfWork
+from src.utils.service import BaseService, transaction_mode
+from src.utils.constants import BOARD_NOT_FOUND_MSG, BOARD_EXIST_MSG
+from src.repositories.board import BoardRepository
 
-class BoardService:
-    def __init__(self, uow: UnitOfWork = Depends(UnitOfWork.get_uow)):
-        self.uow = uow
 
+
+class BoardService(BaseService, BoardRepository):
+
+    _repo: str = "board"
+
+    @transaction_mode
     async def create_board(self, board_data: BoardCreateRequest) -> Board:
-        async with self.uow:
-            existing_board = await self.uow._session.execute(
-                select(Board).where(Board.name == board_data.name)
-            )
-            if existing_board.scalar_one_or_none():
-                raise HTTPException(status_code=409, detail="Board with this name already exists")
+        existing_board = await self.uow.board.get_by_name(name=board_data.name)
+        if existing_board:
+            self.check_existence(obj=board_data, details=BOARD_EXIST_MSG)
 
-            board = Board(
-                name=board_data.name,
-            )
-            new_board = await self.uow.board.create(board)
-            return new_board
+        new_board = await self.add_one_and_get_obj(**board_data.model_dump())
+        return new_board
 
+    @transaction_mode
     async def get_all_boards(self) -> Sequence[Board]:
-        async with self.uow:
-            return await self.uow.board.get_all()
+        return await self.get_by_filter_all()
 
-    async def get_board(self, board_id: UUID) -> Optional[Board]:
-        async with self.uow:
-            board_sa = await self.uow.board.get_by_id(board_id)
-            if not board_sa:
-                raise HTTPException(status_code=404, detail="User not found")
-            return board_sa
+    @transaction_mode
+    async def get_board_by_id(self, board_id: UUID) -> Optional[Board]:
+        board = await self.get_by_filter_one_or_none(id=board_id)
+        self.check_existence(board, details=BOARD_NOT_FOUND_MSG)
+        return board
 
+    @transaction_mode
+    async def update_board_by_id(self, board_id: UUID, board_data: BoardUpdateRequest) -> Optional[Board]:
+        existing_board = await self.get_by_filter_one_or_none(id=board_id)
+        if not existing_board:
+            self.check_existence(existing_board, details=BOARD_NOT_FOUND_MSG)
 
-    async def update_board(self, board_id: UUID, board_data: BoardUpdateRequest) -> Optional[Board]:
-        async with self.uow:
-            existing_board = await self.uow.board.get_by_id(board_id)
-            if not existing_board:
-                return None
+        updated_board = await self.update_one_by_id(obj_id=board_id, **board_data.model_dump(exclude_unset=True))
+        return updated_board
 
-            update_dict = board_data.model_dump(exclude_unset=True)
-            for key, value in update_dict.items():
-                setattr(existing_board, key, value)
+    @transaction_mode
+    async def delete_board_by_id(self, board_id: UUID) -> None:
+        existing_board = await self.get_by_filter_one_or_none(id=board_id)
+        self.check_existence(existing_board, details=BOARD_NOT_FOUND_MSG)
 
-            updated_board = await self.uow.board.update(existing_board, update_dict)
-            return updated_board
-
-    async def delete_board(self, board_id: UUID) -> None:
-        async with self.uow:
-            board_sa = await self.uow.board.get_by_id(board_id)
-            if not board_sa:
-                raise HTTPException(status_code=404, detail="Board not found")
-            await self.uow.board.delete(board_id)
+        await self.delete_by_ids(board_id)

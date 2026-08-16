@@ -3,12 +3,15 @@ from fastapi import APIRouter, Depends
 from pydantic import UUID4
 
 from src.api.v1.services.user import UserService
-from src.schemas.input import (
+from src.schemas.user import (
     UserCreateRequest,
     UserUpdateRequest,
-    UserFilters
+    UserFilters,
+    UsersListResponse,
+    UserResponse,
+    CreateUserResponse,
+    UserDB
 )
-from src.schemas.output import UsersListResponse, UserResponse, CreateUserResponse, UserDB # UserDB теперь здесь
 
 router_user = APIRouter(prefix='/users')
 

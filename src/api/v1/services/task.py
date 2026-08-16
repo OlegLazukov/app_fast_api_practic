@@ -1,141 +1,105 @@
 
 from typing import List, Sequence
-
-from fastapi import Depends, HTTPException
+from fastapi import HTTPException
 from pydantic import UUID4
-
-from sqlalchemy.future import select
-from src.schemas.input import TaskCreateRequest, TaskUpdateRequest
-from src.schemas.output import TaskResponse, UserDB, TaskListResponse
+from src.repositories import TaskRepository
+from src.schemas.task import TaskCreateRequest, TaskUpdateRequest, TaskResponse, TaskListResponse
 from src.models.models import Task, User
-from src.utils.unit_of_work import UnitOfWork
+from src.utils.constants import TASK_EXIST_MSG, TASK_NOT_FOUND_MSG, TASK_FAIL_MSG, AUTHOR_NOT_FOUND_MSG, USER_NOT_FOUND_MSG
+from src.utils.service import BaseService, transaction_mode
 
 
-class TaskService:
-    def __init__(self, uow: UnitOfWork = Depends(UnitOfWork.get_uow)):
-        self.uow = uow
+class TaskService(BaseService, TaskRepository):
+    _repo: str = "task"
 
-    def _user_to_userdb(self, user_sa: User | None) -> UserDB | None:
-        if not user_sa:
-            return None
-        return UserDB(
-            id=user_sa.id,
-            full_name=user_sa.full_name,
-            email=user_sa.email,
-        )
+    @transaction_mode(auto_flush=True)
+    async def create_task(self, task_data: TaskCreateRequest) -> TaskResponse:
+        existing_task = await self.uow.task.get_by_name(title=task_data.title)
+        if existing_task:
+            raise HTTPException(status_code=409, detail=TASK_EXIST_MSG)
 
-    def _task_to_task_response(self, task_sa: Task | None) -> TaskResponse | None:
-        if not task_sa:
-            return None
-        return TaskResponse(
-            id=task_sa.id,
-            title=task_sa.title,
-            description=task_sa.description,
-            status=task_sa.status,
-            created_at=task_sa.created_at,
-            column_id=task_sa.column_id,
-            board_id=task_sa.board_id,
-            sprint_id=task_sa.sprint_id,
-            group_id=task_sa.group_id,
-            author=self._user_to_userdb(task_sa.author),
-            author_id=task_sa.author_id,
-            observers=[self._user_to_userdb(obs) for obs in task_sa.observers] if task_sa.observers else [],
-        )
+        task_data_dict = task_data.model_dump(exclude_unset=True, exclude={'observer_ids'})
 
-    async def created_task(self, task_data: TaskCreateRequest) -> TaskResponse:
-        async with self.uow:
-            new_task_sa = Task(
-                title=task_data.title,
-                description=task_data.description,
-                status=task_data.status,
-                author_id=task_data.author_id,
-                column_id=task_data.column_id,
-                board_id=task_data.board_id,
-                sprint_id=task_data.sprint_id,
-                group_id=task_data.group_id,
-            )
-            if task_data.observer_ids:
-                observers = await self._get_users_by_ids(task_data.observer_ids)
-                new_task_sa.observers.extend(observers)
+        new_task_sa: Task = await self.add_one_and_get_obj(**task_data_dict)
 
-            created_task_sa = await self.uow.task.create(new_task_sa)
+        if task_data.observer_ids:
+            observers = await self._get_users_by_ids(task_data.observer_ids)
+            new_task_sa.observers.extend(observers)
 
-            task_with_relations = await self.uow.task.get_with_relations(created_task_sa.id)
-            if not task_with_relations:
-                raise HTTPException(status_code=500, detail="Failed to retrieve created task with relations")
 
-            return self._task_to_task_response(task_with_relations)
+        task_with_relations = await self.uow.task.get_with_relations(new_task_sa.id)
+        if not task_with_relations:
+            raise HTTPException(status_code=500, detail=TASK_FAIL_MSG)
 
+        return task_with_relations.to_task_response_schema()
+
+    @transaction_mode
     async def get_task(self, task_id: UUID4) -> TaskResponse | None:
-        async with self.uow:
-            task_sa = await self.uow.task.get_with_relations(task_id)
-            return self._task_to_task_response(task_sa)
+        task_sa = await self.uow.task.get_with_relations(task_id)
+        self.check_existence(task_sa, details=TASK_NOT_FOUND_MSG)
+        return task_sa.to_task_response_schema()
 
+    @transaction_mode
     async def get_all_tasks(self, author_id: UUID4 | None = None, status: str | None = None) -> TaskListResponse:
-        async with self.uow:
-            tasks_sa = await self.uow.task.get_all_with_relations()
+        tasks_sa = await self.uow.task.get_all_with_relations()
+        filtered_tasks = []
+        for task in tasks_sa:
+            if author_id is not None and task.author_id != author_id:
+                continue
+            if status is not None and str(task.status.value) != status:
+                continue
+            filtered_tasks.append(task)
+        return TaskListResponse(tasks=[task.to_task_response_schema() for task in filtered_tasks])
 
-            filtered_tasks = []
-            for task in tasks_sa:
-                if author_id is not None and task.author_id != author_id:
-                    continue
-                if status is not None and task.status.value != status:
-                    continue
-                filtered_tasks.append(task)
-
-            return TaskListResponse(tasks=[self._task_to_task_response(task) for task in filtered_tasks])
-
+    @transaction_mode(auto_flush=True)
     async def update_task(self, task_id: UUID4, task_data: TaskUpdateRequest) -> TaskResponse | None:
-        async with self.uow:
-            existing_task_sa = await self.uow.task.get_with_relations(task_id)
-            if not existing_task_sa:
-                return None
+        existing_task_sa = await self.uow.task.get_with_relations(task_id)
+        self.check_existence(existing_task_sa, details=TASK_NOT_FOUND_MSG)
 
-            update_data = task_data.model_dump(exclude_unset=True)
+        update_data = task_data.model_dump(exclude_unset=True)
 
-            for key, value in update_data.items():
-                if key != 'observer_ids':
-                    setattr(existing_task_sa, key, value)
+        fields_to_update = {k: v for k, v in update_data.items() if
+                            k not in ['author_id', 'executor_id', 'observer_ids']}
 
-            if 'author_id' in update_data and update_data['author_id'] is not None:
-                new_author = await self.uow.user._get_users_by_ids(update_data['author_id'])
+        await self.update_one_by_id(obj_id=task_id, **fields_to_update)
+
+        if 'author_id' in update_data:
+            if update_data['author_id'] is not None:
+                new_author = await self.get_by_filter_one_or_none(update_data['author_id'])
                 if not new_author:
-                    raise HTTPException(status_code=400, detail=f"Author with ID {update_data['author_id']} not found.")
+                    raise HTTPException(status_code=400, detail=AUTHOR_NOT_FOUND_MSG)
                 existing_task_sa.author = new_author
-            elif 'author_id' in update_data and update_data['author_id'] is None:  # Если явно передали null
+            else:
                 existing_task_sa.author = None
 
-            if 'executor_id' in update_data and update_data['executor_id'] is not None:
-                new_executor = await self.uow.user.get_by_id(update_data['executor_id'])
-                if not new_executor:
-                    raise HTTPException(status_code=400,
-                                        detail=f"Executor with ID {update_data['executor_id']} not found.")
-                existing_task_sa.executor = new_executor
-            elif 'executor_id' in update_data and update_data['executor_id'] is None:  # Если явно передали null
-                existing_task_sa.executor = None
 
-            if 'observer_ids' in update_data and update_data['observer_ids'] is not None:
-                existing_task_sa.observers.clear()
-                if update_data['observer_ids']:
-                    new_observers = await self._get_users_by_ids(update_data['observer_ids'])
-                    existing_task_sa.observers.extend(new_observers)
+        if 'observer_ids' in update_data:
+            existing_task_sa.observers.clear()
+            if update_data['observer_ids']:
+                new_observers = await self._get_users_by_ids(update_data['observer_ids'])
+                existing_task_sa.observers.extend(new_observers)
 
-            await self.uow._session.flush()
-            task_with_relations = await self.uow.task.get_with_relations(existing_task_sa.id)
-            # updated_task_sa = await self.uow.task.update(existing_task_sa)
-            return self._task_to_task_response(task_with_relations)
+        await self.uow.refresh(existing_task_sa)
 
+        task_with_relations = await self.uow.task.get_with_relations(existing_task_sa)
+        if not task_with_relations:
+            raise HTTPException(status_code=500, detail=TASK_FAIL_MSG)
+
+        return task_with_relations.to_task_response_schema()
+
+    @transaction_mode
     async def delete_task(self, task_id: UUID4) -> None:
-        async with self.uow:
-            await self.uow.task.delete(task_id)
+        existing_task = await self.get_by_filter_one_or_none(id=task_id)
+        self.check_existence(existing_task, details=TASK_NOT_FOUND_MSG)
 
+        await self.delete_by_ids(task_id)
+
+    @transaction_mode
     async def _get_users_by_ids(self, user_ids: List[UUID4]) -> Sequence[User]:
-
-        async with self.uow:
-            result = await self.uow._session.execute(select(User).where(User.id.in_(user_ids)))
-            users = result.scalars().all()
-            if len(users) != len(user_ids):
-                found_ids = {u.id for u in users}
-                missing_ids = [str(uid) for uid in user_ids if uid not in found_ids]
-                raise HTTPException(status_code=400, detail=f"Users not found: {', '.join(missing_ids)}")
-            return users
+        unique_ids = list(set(user_ids))
+        users = await self.uow.user.get_by_ids(ids=unique_ids)
+        if len(users) != len(user_ids):
+            found_ids = {user.id for user in users}
+            missing_ids = [str(uid) for uid in user_ids if uid not in found_ids]
+            raise HTTPException(status_code=400, detail=f"User not found {', '.join(missing_ids)}")
+        return users

@@ -2,11 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import UUID4
 
 from src.api.v1.services.task import TaskService
-from src.schemas.input import (
-    TaskCreateRequest,
-    TaskUpdateRequest
-)
-from src.schemas.output import TaskResponse, TaskListResponse
+from src.schemas.task import TaskResponse, TaskListResponse, TaskUpdateRequest,TaskCreateRequest
 
 router_task = APIRouter(prefix='/tasks')
 
@@ -20,7 +16,7 @@ async def create_task(
     service: TaskService = Depends(TaskService),
 ) -> TaskResponse:
     """Создает новую задачу."""
-    created_task_response = await service.created_task(task_data)
+    created_task_response = await service.create_task(task_data)
     return created_task_response
 
 @router_task.get(

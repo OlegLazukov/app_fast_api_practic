@@ -3,8 +3,9 @@ from pydantic import UUID4
 from typing import List
 
 from src.api.v1.services.group import GroupService
-from src.schemas.input import GroupCreateRequest, GroupUpdateRequest
-from src.schemas.output import GroupResponse
+from src.schemas.group import GroupCreateRequest, GroupUpdateRequest, GroupResponse
+
+from src.utils.constants import GROUP_NOT_FOUND_MSG
 
 router_group = APIRouter(prefix="/groups")
 
@@ -46,9 +47,9 @@ async def get_group(
     service: GroupService = Depends(GroupService)
 ) -> GroupResponse:
     """Возвращает информацию о группе по её уникальному идентификатору."""
-    group = await service.get_group(group_id)
+    group = await service.get_group_by_id(group_id)
     if not group:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=GROUP_NOT_FOUND_MSG)
     return GroupResponse.model_validate(group)
 
 @router_group.put(
@@ -63,9 +64,9 @@ async def update_group(
     service: GroupService = Depends(GroupService)
 ) -> GroupResponse:
     """Обновляет информацию о группе по её уникальному идентификатору."""
-    updated_group = await service.update_group(group_id, group_data)
+    updated_group = await service.update_group_by_id(group_id, group_data)
     if not updated_group:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=GROUP_NOT_FOUND_MSG)
     return GroupResponse.model_validate(updated_group)
 
 @router_group.delete(
@@ -78,4 +79,4 @@ async def delete_group(
     service: GroupService = Depends(GroupService)
 ) -> None:
     """Удаляет группу по её уникальному идентификатору."""
-    await service.delete_group(group_id)
+    await service.delete_group_by_id(group_id)

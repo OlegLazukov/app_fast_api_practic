@@ -1,0 +1,15 @@
+TASK_NOT_FOUND_MSG = 'Task Not Found'
+USER_NOT_FOUND_MSG = 'User not found'
+BOARD_NOT_FOUND_MSG = 'Board not found'
+GROUP_NOT_FOUND_MSG = 'GROUP not found'
+COLUMN_NOT_FOUND_MSG = 'Column not found'
+SPRINT_NOT_FOUND_MSG = 'Sprint not found' "Board with this name already exists"
+BOARD_EXIST_MSG = "Board with this name already exists"
+TASK_EXIST_MSG = "Task with this name already exists"
+USER_EXIST_MSG = "User with this name already exists"
+COLUMN_EXIST_MSG = "Column with this name already exists"
+GROUP_EXIST_MSG = "Group with this name already exists"
+SPRINT_EXIST_MSG = "Sprint with this name already exists"
+TASK_FAIL_MSG = "Failed to retrieve created task with relations"
+AUTHOR_NOT_FOUND_MSG = 'Author not found'
+Executor_NOT_FOUND_MSG = 'Executor not found'

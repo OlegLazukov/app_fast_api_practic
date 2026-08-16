@@ -3,8 +3,9 @@ from pydantic import UUID4
 from typing import List
 
 from src.api.v1.services.sprint import SprintService
-from src.schemas.input import SprintCreateRequest, SprintUpdateRequest
-from src.schemas.output import SprintResponse
+from src.schemas.sprint import SprintCreateRequest, SprintUpdateRequest, SprintResponse
+
+from src.utils.constants import SPRINT_NOT_FOUND_MSG
 
 router_sprint = APIRouter(prefix="/sprints")
 
@@ -46,9 +47,9 @@ async def get_sprint(
     service: SprintService = Depends(SprintService)
 ) -> SprintResponse:
     """Возвращает информацию о спринте по его уникальному идентификатору."""
-    sprint = await service.get_sprint(sprint_id)
+    sprint = await service.get_sprint_by_id(sprint_id)
     if not sprint:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sprint not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=SPRINT_NOT_FOUND_MSG)
     return SprintResponse.model_validate(sprint)
 
 @router_sprint.put(
@@ -63,9 +64,9 @@ async def update_sprint(
     service: SprintService = Depends(SprintService)
 ) -> SprintResponse:
     """Обновляет информацию о спринте по его уникальному идентификатору."""
-    updated_sprint = await service.update_sprint(sprint_id, sprint_data)
+    updated_sprint = await service.update_sprint_by_id(sprint_id, sprint_data)
     if not updated_sprint:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sprint not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=SPRINT_NOT_FOUND_MSG)
     return SprintResponse.model_validate(updated_sprint)
 
 @router_sprint.delete(
@@ -78,4 +79,4 @@ async def delete_sprint(
     service: SprintService = Depends(SprintService)
 ) -> None:
     """Удаляет спринт по его уникальному идентификатору."""
-    await service.delete_sprint(sprint_id)
+    await service.delete_sprint_by_id(sprint_id)

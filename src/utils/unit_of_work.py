@@ -1,11 +1,7 @@
 from abc import ABC, abstractmethod
 from types import TracebackType
 from typing import Any, Never
-
-from fastapi import Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from src.database.db import get_async_session
+from src.database.db import async_session_maker
 from src.repositories import TaskRepository, UserRepository, BoardRepository, ColumnRepository, GroupRepository, SprintRepository
 
 
@@ -49,17 +45,19 @@ class UnitOfWork(AbstractUnitOfWork):
         "sprint",
         "group",
     )
-    def __init__(self, session: AsyncSession):
-        self._session = session
+    def __init__(self) -> None:
+        self.is_open = False
+
+    async def __aenter__(self) -> None:
+        self._session = async_session_maker()
         self.task = TaskRepository(self._session)
         self.user = UserRepository(self._session)
         self.board = BoardRepository(self._session)
         self.group = GroupRepository(self._session)
         self.sprint = SprintRepository(self._session)
         self.column = ColumnRepository(self._session)
+        self.is_open = True
 
-    async def __aenter__(self) -> "UnitOfWork":
-        return self
 
     async def __aexit__(
         self,
@@ -72,10 +70,6 @@ class UnitOfWork(AbstractUnitOfWork):
         else:
             await self._session.rollback()
         await self._session.close()
-
-    @classmethod
-    async def get_uow(cls, session: AsyncSession = Depends(get_async_session)):
-        return cls(session)
 
     async def merge(self, obj: Any)-> None:
         await self._session.merge(obj)

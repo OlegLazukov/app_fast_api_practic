@@ -3,8 +3,8 @@ from pydantic import UUID4
 from typing import List
 
 from src.api.v1.services.column import ColumnService
-from src.schemas.input import ColumnCreateRequest, ColumnUpdateRequest
-from src.schemas.output import ColumnResponse
+from src.schemas.column import ColumnCreateRequest, ColumnUpdateRequest, ColumnResponse
+from src.utils.constants import COLUMN_NOT_FOUND_MSG
 
 router_column = APIRouter(prefix="/columns")
 
@@ -49,9 +49,9 @@ async def get_column(
     service: ColumnService = Depends(ColumnService) # Зависимость на сервис
 ) -> ColumnResponse:
     """Возвращает информацию о колонке по её уникальному идентификатору."""
-    column = await service.get_column(column_id)
+    column = await service.get_column_by_id(column_id)
     if not column:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Column not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=COLUMN_NOT_FOUND_MSG)
     return ColumnResponse.model_validate(column)
 
 @router_column.put(
@@ -67,9 +67,9 @@ async def update_column(
 ) -> ColumnResponse:
     """Обновляет информацию о колонке по её уникальному идентификатору."""
     try:
-        updated_column = await service.update_column(column_id, column_data)
+        updated_column = await service.update_column_by_id(column_id, column_data)
         if not updated_column:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Column not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=COLUMN_NOT_FOUND_MSG)
         return ColumnResponse.model_validate(updated_column)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -85,4 +85,4 @@ async def delete_column(
     service: ColumnService = Depends(ColumnService)
 ) -> None:
     """Удаляет колонку по её уникальному идентификатору."""
-    await service.delete_column(column_id)
+    await service.delete_column_by_id(column_id)

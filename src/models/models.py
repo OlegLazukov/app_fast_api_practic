@@ -5,6 +5,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 from typing import Annotated
 from src.enums.task_status import TaskStatus
+from src.schemas.task import TaskResponse, UserDB
 
 Base = declarative_base()
 
@@ -31,6 +32,15 @@ class User(Base):
         back_populates='assignee',
         foreign_keys='[Task.assignee_id]'
     )
+
+    def to_userdb_schema(self) -> "UserDB":
+        return UserDB(
+            id=self.id,
+            full_name=self.full_name,
+            email=self.email,
+            created_at=self.created_at,
+        )
+
 
 class Task(Base):
     __tablename__ = 'task'
@@ -62,6 +72,25 @@ class Task(Base):
     group_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('group.id', ondelete="SET NULL"),
                                            nullable=True)
 
+    def to_task_response_schema(self) -> "TaskResponse":
+
+        author_schema = self.author.to_userdb_schema() if self.author else None
+        observers_schemas = [obs.to_userdb_schema() for obs in self.observers] if self.observers else []
+
+        return TaskResponse(
+            id=self.id,
+            title=self.title,
+            description=self.description,
+            status=self.status,
+            created_at=self.created_at,
+            column_id=self.column_id,
+            board_id=self.board_id,
+            sprint_id=self.sprint_id,
+            group_id=self.group_id,
+            author=author_schema,
+            author_id=self.author_id,
+            observers=observers_schemas,
+        )
 
 class TaskObserver(Base):
     __tablename__ = "task_observers"
