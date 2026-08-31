@@ -12,6 +12,7 @@ __pycache__/
 .mypy_cache/
 
 src/.env
+.test.env
 
 logs.json
 src/logs.json

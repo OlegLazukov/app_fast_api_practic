@@ -15,56 +15,45 @@ if TYPE_CHECKING:
 
 
 class AbstractRepository(ABC):
-    """An abstract class implementing the CRUD operations for working with any database."""
 
     @abstractmethod
     async def add_one(self, *args: Any, **kwargs: Any) -> Never:
-        """Adding one entry."""
         raise NotImplementedError
 
     @abstractmethod
     async def add_one_and_get_id(self, *args: Any, **kwargs: Any) -> Never:
-        """Adding one entry and getting the ID of this entry."""
         raise NotImplementedError
 
     @abstractmethod
     async def add_one_and_get_obj(self, *args: Any, **kwargs: Any) -> Never:
-        """Adding one entry and getting that entry."""
         raise NotImplementedError
 
     @abstractmethod
     async def bulk_add(self, *args: Any, **kwargs: Any) -> Never:
-        """Bulk adding of entries."""
         raise NotImplementedError
 
     @abstractmethod
     async def get_by_filter_one_or_none(self, *args: Any, **kwargs: Any) -> Never:
-        """Get one entry for the given filter, if it exists."""
         raise NotImplementedError
 
     @abstractmethod
     async def get_by_filter_all(self, *args: Any, **kwargs: Any) -> Never:
-        """Getting all entries according to the specified filter."""
         raise NotImplementedError
 
     @abstractmethod
     async def update_one_by_id(self, *args: Any, **kwargs: Any) -> Never:
-        """Updating a single entry by its ID."""
         raise NotImplementedError
 
     @abstractmethod
     async def delete_by_filter(self, *args: Any, **kwargs: Any) -> Never:
-        """Bulk deletion of entries by filter."""
         raise NotImplementedError
 
     @abstractmethod
     async def delete_by_ids(self, *args: Any, **kwargs: Any) -> Never:
-        """Bulk deletion of entries by passed IDs."""
         raise NotImplementedError
 
     @abstractmethod
     async def delete_all(self, *args: Any, **kwargs: Any) -> Never:
-        """Bulk delete all entries."""
         raise NotImplementedError
 
 
@@ -72,11 +61,8 @@ M = TypeVar('M', bound=Base)
 
 
 class SqlAlchemyRepository(AbstractRepository, Generic[M]):
-    """Basic repository implementing basic CRUD functions with a basic table.
-    The repository works using the SqlAlchemy library.
-    """
 
-    _model: type[M]  # must be a child class of SQLAlchemy DeclarativeBase
+    _model: type[M]
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session

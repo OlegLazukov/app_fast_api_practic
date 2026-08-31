@@ -21,10 +21,6 @@ def transaction_mode(*, auto_flush: bool) -> Callable[[T], T]: ...
 
 
 def transaction_mode(_func: T | None = None, *, auto_flush: bool = False) -> T | Callable[[T], T]:
-    """Wraps the function in transaction mode.
-    Checks if the UnitOfWork context manager is open.
-    If not, then opens the context manager and opens a transaction.
-    """
 
     def decorator(func: T) -> T:
         @functools.wraps(func)
