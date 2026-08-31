@@ -1,0 +1,2 @@
+
+BASE_ENDPOINT_URL = 'api/v1'
